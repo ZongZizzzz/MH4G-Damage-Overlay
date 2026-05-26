@@ -13,3 +13,5 @@
 | | XStaggerStep | `45` | 触发连续伤害时，X轴左右随机错开的像素步长。 |
 | | OverlapMax | `10` | 同一时间段内允许向上堆叠的伤害数字最大数量，达到后重置堆叠。 |
 | **[Scanner]** | HpMaxLimit | `40000` | 内存扫描时的血量上限过滤阈值，超出此数值的地址将被剔除。 |
+
+<img width="1583" height="951" alt="Image" src="https://github.com/user-attachments/assets/41845dbc-4c86-4690-8fed-ec0fa0e32124" />
