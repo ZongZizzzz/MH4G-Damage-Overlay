@@ -1,9 +1,9 @@
 #include "OverlayRenderer.h"
 #include "ConfigManager.h"
-#include "MemoryScanner.h" 
+#include "MemoryScanner.h"
 #include <d3d11.h>
-#include <dxgi1_3.h> 
-#include <dcomp.h>   
+#include <dxgi1_3.h>
+#include <dcomp.h>
 #include <string>
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
@@ -157,28 +157,65 @@ namespace OverlayRenderer {
 
     void BeginFrame() { g_Diag_ImGuiFrame = 0; ImGui_ImplDX11_NewFrame(); ImGui_ImplWin32_NewFrame(); ImGui::NewFrame(); g_Diag_ImGuiFrame = 1; }
 
+
+    ImU32 OverlayColorToU32(const OverlayColor& color, float alphaScale = 1.0f) {
+        return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, color.a * alphaScale));
+    }
+
+    void AddDamageText(ImDrawList* dl, const ImVec2& pos, const char* text, float fontSize, float alpha) {
+        const auto& cfg = ConfigManager::Get();
+
+        if (cfg.damageShadowEnabled) {
+            const ImU32 shadowColor = OverlayColorToU32(cfg.damageShadowColor, alpha);
+            if (cfg.damageShadowOffsetX != 0 || cfg.damageShadowOffsetY != 0) {
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x + static_cast<float>(cfg.damageShadowOffsetX), pos.y + static_cast<float>(cfg.damageShadowOffsetY)), shadowColor, text);
+            }
+
+            for (int radius = 1; radius <= cfg.damageShadowThickness; ++radius) {
+                const float r = static_cast<float>(radius);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x - r, pos.y), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x + r, pos.y), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x, pos.y - r), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x, pos.y + r), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x - r, pos.y - r), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x - r, pos.y + r), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x + r, pos.y - r), shadowColor, text);
+                dl->AddText(g_DamageFont, fontSize, ImVec2(pos.x + r, pos.y + r), shadowColor, text);
+            }
+        }
+
+        dl->AddText(g_DamageFont, fontSize, pos, OverlayColorToU32(cfg.damageColor, alpha), text);
+    }
+
     void Render(const std::vector<GameLogic::DisplayMonster>& monsters, std::vector<DamageTick>& ticks) {
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f)); ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
         ImGui::Begin("Canvas", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
         ImDrawList* dl = ImGui::GetForegroundDrawList();
 
-        for (size_t i = 0; i < monsters.size(); ++i) {
-            if (monsters[i].current > 0 && monsters[i].max > 0) {
-                std::string hpStr = "MONSTER [" + std::to_string(i + 1) + "] HP: " + std::to_string(monsters[i].current) + " / " + std::to_string(monsters[i].max);
-                float yPos = (float)g_currentHeight - 40.0f - (static_cast<float>(i) * 35.0f);
-                dl->AddText(g_DamageFont, 28.0f, ImVec2(25.0f, yPos), ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.9f, 0.2f, 1.0f)), hpStr.c_str());
+        const auto& cfg = ConfigManager::Get();
+        // ‰÷»æπ÷ŒÔ—™¡ø£® ‹≈‰÷√øÿ÷∆£©
+        if (cfg.showMonsterHP) {
+            for (size_t i = 0; i < monsters.size(); ++i) {
+                if (monsters[i].current > 0 && monsters[i].max > 0) {
+                    std::string hpStr = "MONSTER [" + std::to_string(i + 1) + "] HP: " + std::to_string(monsters[i].current) + " / " + std::to_string(monsters[i].max);
+                    float yPos = (float)g_currentHeight - 40.0f - (static_cast<float>(i) * 35.0f);
+                    dl->AddText(g_DamageFont, 28.0f, ImVec2(25.0f, yPos), ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.9f, 0.2f, 1.0f)), hpStr.c_str());
+                }
             }
         }
+        // ‰÷»æ…À∫¶∆Æ◊÷£® ‹≈‰÷√øÿ÷∆£©
+        if (cfg.showDamageNumbers) {
+            float configSize = ConfigManager::Get().fontSize;
+            int configFadeTime = ConfigManager::Get().fadeTime;
 
-        float configSize = ConfigManager::Get().fontSize;
-        int configFadeTime = ConfigManager::Get().fadeTime;
-
-        for (const auto& tick : ticks) {
-            float alpha = 1.0f;
-            if (tick.lifetime < configFadeTime) {
-                alpha = static_cast<float>(tick.lifetime) / static_cast<float>(configFadeTime);
+            for (const auto& tick : ticks) {
+                float alpha = 1.0f;
+                if (tick.lifetime < configFadeTime) {
+                    alpha = static_cast<float>(tick.lifetime) / static_cast<float>(configFadeTime);
+                }
+                std::string damageText = std::to_string(tick.damage);
+                AddDamageText(dl, tick.pos, damageText.c_str(), configSize, alpha);
             }
-            dl->AddText(g_DamageFont, configSize, tick.pos, ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.7f, 0.1f, alpha)), std::to_string(tick.damage).c_str());
         }
         ImGui::End();
     }
